@@ -1,9 +1,10 @@
-import { Button, Card, Form, Input, Select, Space, message } from "antd"
+import { Button, Card, Form, Input, Radio, Select, Space, Upload, message } from "antd"
 import './index.scss'
 import ReactQuill from "react-quill"
 import 'react-quill/dist/quill.snow.css'
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createArticleAPI, getChannelAPI } from "@/apis/article"
+import { PlusOutlined } from '@ant-design/icons'
 
 const { Option } = Select
 
@@ -19,20 +20,39 @@ const Publish = () => {
   }, [])
 
   const onFinish = async (formValue) => {
-    console.log(formValue);
+    // console.log(formValue);
+    if(imageType !== imageList.length) return message.warning('图片数量与选择不一致')
     const { channelId, content, title } = formValue
     const params = {
-      channelId,
+      channel_id: channelId,
       content,
       title,
       cover: {
-        type: 0,
-        image: []
+        type: imageType,
+        images: imageList.map(item => item.response.data.url)
       }
     }
     const res = await createArticleAPI(params)
     message.success(res.message)
   }
+
+  const cacheImageList = useRef([])
+  const [imageList, setImageList] = useState([])
+  const onUpload = (value) => {
+    setImageList(value.fileList)
+    cacheImageList.current = value.fileList
+  }
+
+  const [imageType, setImageType] = useState(1)
+  const onTypeChange = (value) => {
+    setImageType(value.target.value)
+    if(value.target.value === 1) {
+      const imgList = cacheImageList.current[0] ? [cacheImageList.current[0]] : []
+      setImageList(imgList)
+    } else if (value.target.value === 3) {
+      setImageList(cacheImageList.current)
+    }
+  } 
 
   return (
     <div className="publish">
@@ -62,6 +82,30 @@ const Publish = () => {
                 </Option>
               ))}
             </Select>
+          </Form.Item>
+          <Form.Item label="封面">
+            <Form.Item name="type">
+              <Radio.Group onChange={onTypeChange}>
+                <Radio value={1}>单图</Radio>
+                <Radio value={3}>三图</Radio>
+                <Radio value={0}>无图</Radio>
+              </Radio.Group>
+            </Form.Item>
+            {imageType > 0 &&
+            <Upload 
+              listType="picture-card" 
+              showUploadList
+              name="image"
+              action={'http://geek.itheima.net/v1_0/upload'}
+              onChange={onUpload}
+              maxCount={imageType}
+              multiple={imageType > 1}
+              fileList={imageList}
+            >
+              <div>
+                <PlusOutlined></PlusOutlined>
+              </div>
+            </Upload>}
           </Form.Item>
           <Form.Item
             label="内容"
