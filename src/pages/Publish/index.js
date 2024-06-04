@@ -3,13 +3,18 @@ import './index.scss'
 import ReactQuill from "react-quill"
 import 'react-quill/dist/quill.snow.css'
 import { useEffect, useRef, useState } from "react"
-import { createArticleAPI, getChannelAPI } from "@/apis/article"
+import { createArticleAPI, editArticleAPI, getArticleDetailAPI, getChannelAPI } from "@/apis/article"
 import { PlusOutlined } from '@ant-design/icons'
+import { useNavigate, useSearchParams } from "react-router-dom"
 
 const { Option } = Select
 
 const Publish = () => {
   const [ channelList, setChannelList ] = useState([])
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const articleId = searchParams.get('id')
+  const [form] = Form.useForm()
 
   useEffect(() => {
     const getChannelList = async () => {
@@ -17,23 +22,48 @@ const Publish = () => {
       setChannelList(res.data.channels)
     }
     getChannelList()
-  }, [])
+    const getArticleDetail = async () => {
+      const res = await getArticleDetailAPI(articleId)
+      const { cover, ...formValue} = res.data
+      form.setFieldsValue({...formValue, type: cover.type})
+      setImageType(cover.type)
+      setImageList(cover.images.map(url => ({ url })))
+    }
+    if (articleId) {
+      getArticleDetail()
+    }
+  }, [articleId, form])
 
   const onFinish = async (formValue) => {
     // console.log(formValue);
     if(imageType !== imageList.length) return message.warning('图片数量与选择不一致')
-    const { channelId, content, title } = formValue
+    const { channel_id, content, title } = formValue
+    const formatUrl = (list) => {
+      return list.map(item => {
+        if(item.response) {
+          return item.response.data.url
+        } else {
+          return item.url
+        }
+      })
+    }
     const params = {
-      channel_id: channelId,
+      channel_id: channel_id,
       content,
       title,
       cover: {
         type: imageType,
-        images: imageList.map(item => item.response.data.url)
+        images: formatUrl(imageList)
       }
     }
-    const res = await createArticleAPI(params)
-    message.success(res.message)
+    if (articleId) {
+      const res = await editArticleAPI(articleId, params)
+      message.success(res.message)
+    } else {
+      const res = await createArticleAPI(params)
+      message.success(res.message)
+    }
+    navigate('/article')
   }
 
   const cacheImageList = useRef([])
@@ -56,12 +86,13 @@ const Publish = () => {
 
   return (
     <div className="publish">
-      <Card title='创建文章'>
+      <Card title={articleId ? '编辑文章' : '创建文章'}>
         <Form
           labelCol={{ span: 2 }}
           wrapperCol={{ span: 12 }}
           initialValues={{ type: 1 }}
           onFinish={onFinish}
+          form={form}
         >
           <Form.Item
             label="标题"
@@ -72,7 +103,7 @@ const Publish = () => {
           </Form.Item>
           <Form.Item
             label="频道"
-            name="channelId"
+            name="channel_id"
             rules={[{ required: true, message: '请输入文章频道' }]}
           >
             <Select placeholder="请选择文章频道" style={{ width: 500 }}>
@@ -117,7 +148,7 @@ const Publish = () => {
           <Form.Item wrapperCol={{ offset: 2 }}>
             <Space>
               <Button size="large" type="primary" htmlType="submit">
-                发布文章
+                {articleId ? '更新文章' : '发布文章'}
               </Button>
             </Space>
           </Form.Item>

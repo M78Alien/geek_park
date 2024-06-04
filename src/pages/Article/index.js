@@ -1,22 +1,47 @@
-import { getChannelAPI } from "@/apis/article"
-import { Card, Form, Select, DatePicker, Button, Table, Tag, Space } from "antd"
+import {  deleteArticleAPI, getArticleListAPI, getChannelAPI } from "@/apis/article"
+import { Card, Form, Select, DatePicker, Button, Table, Tag, Space, Popconfirm } from "antd"
 import { useEffect, useState } from "react"
 import locale from 'antd/es/date-picker/locale/zh_CN'
 import img404 from '@/assets/error.png'
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { useNavigate } from "react-router-dom"
 
 const {Option} = Select
 const {RangePicker} = DatePicker
 
 const Article = () => {
+  const navigate = useNavigate()
   const [channelList, setChannelList] = useState([])
+  const [params, setParams] = useState({
+    status: null,
+    channel_id: null,
+    begin_pubdate: null,
+    end_pubdate: null,
+    page: 1,
+    per_page: 4
+  })
+  const [articleList, setArticleList] = useState({
+    list: [],
+    count: 0
+  })
+
+  const getArticleList = async (params) => {
+    const res = await getArticleListAPI(params)
+    const { results, total_count } = res.data
+    setArticleList({
+      list: results,
+      count: total_count
+    })
+  }
+
   useEffect(() => {
     const getChannelList = async () => {
       const res = await getChannelAPI()
       setChannelList(res.data.channels)
     }
     getChannelList()
-  }, [])
+    getArticleList(params)
+  }, [params])
 
   const columns = [
     {
@@ -55,35 +80,59 @@ const Article = () => {
     },
     {
       title: '操作',
-      render: () => {
+      render: (data) => {
         return (
           <Space size="middle">
-            <Button type="primary" shape="round" icon={<EditOutlined/>} />
-            <Button type="primary" danger shape="round" icon={<DeleteOutlined/>} />
+            <Button type="primary" shape="round" icon={<EditOutlined/>} onClick={
+              () => navigate(`/publish?id=${data.id}`)
+            } />
+            <Popconfirm
+              title="警告"
+              description="确定要删除这篇文章吗？"
+              onConfirm={() => deleteArticle(data)}
+              okText="确认"
+              cancelText="取消"
+              placement="topRight"
+            >
+              <Button type="primary" danger shape="round" icon={<DeleteOutlined/>} />
+            </Popconfirm>
           </Space>
         )
       }
     }
   ]
 
-  const data = [
-    {
-      id: '8218',
-      comment_count: 0,
-      cover: {
-        images: [],
-      },
-      like_count: 0,
-      pubdate: '2019-03-11 09:00:00',
-      read_count: 2,
-      status: 2,
-      title: 'wkwebview离线化加载h5资源解决方案'
-    }
-  ]
+  const onFinish = (formValue) => {
+    const { channel_id, data } = formValue
+    setParams({
+      status: null,
+      channel_id: channel_id,
+      begin_pubdate: data[0].format('YYYY-MM-DD'),
+      end_pubdate: data[1].format('YYYY-MM-DD'),
+      page: 1,
+      per_page: 4
+    })
+  }
+
+  const pageChange = (page) => {
+    setParams({
+      ...params,
+      page
+    })
+  }
+
+  const deleteArticle = async (data) => {
+    await deleteArticleAPI(data.id)
+    setParams({
+      page: 1,
+      per_page: 4
+    })
+  }
+
   return (
     <div>
-      <Card title='文章管理'>
-        <Form labelCol={{ span: 1 }}>
+      <Card title='文章管理' style={{height: 250 }}>
+        <Form labelCol={{ span: 1 }} onFinish={onFinish}>
           <Form.Item label="频道" name="channel_id">
             <Select
               placeholder="请选择文章频道"
@@ -98,15 +147,20 @@ const Article = () => {
             <RangePicker locale={locale} style={{ width: 300 }}></RangePicker>
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit" style={{ marginLeft: 20}}>
+            <Button type="primary" htmlType="submit" style={{ marginLeft: 20 }}>
               筛选
             </Button>
           </Form.Item>
         </Form>
       </Card>
 
-      <Card title={`根据筛选结果查询到 count 条`} style={{ marginTop: 20 }}>
-        <Table rowKey="id" columns={columns} dataSource={data}></Table>
+      <Card style={{ marginTop: 10 }}>
+        <Table rowKey="id" columns={columns} dataSource={articleList.list} size="middle" pagination={{
+          current: params.page,
+          pageSize: params.per_page,
+          onChange: pageChange,
+          total: articleList.count
+        }}></Table>
       </Card>
     </div>
   )
